@@ -7,7 +7,8 @@ contract CryptoChess {
 	address[2] players;
 	bool[2] isFirstMove;
 
-	uint256 [8][8] board;
+	uint256 [8][8] boardPieces; //index Y, X
+	uint256 [8][8] boardColors;
 
 	uint256 enteringPrice;
 	uint256 lastTime;
@@ -46,39 +47,51 @@ contract CryptoChess {
 		revert("The game is full!");
 	}
 
-	function move(uint256[2] memory _from, uint256[2] memory _to) public {
+	function move(uint256[2] memory _from, uint256[2] memory _to) public onlyTurn {
 		require(_from[0] < 8 && _from[1] < 8 && _to[0] < 8 && _to[1] < 8, "Out of bounds!");
 		require (check_move(_from, _to) == true, "This move is not valid!");
-		if (board[_to[0]][_to[1]] == 5)
+		if (boardPieces[_to[0]][_to[1]] == 5)
 			_end_game(turnIndex);
 
-		uint256 piece = board[_from[0]][_from[1]]; //origin in top left
-		board[_from[0]][_from[1]] = 0;
-		board[_to[0]][_to[1]] = piece;
+		uint256 piece = boardPieces[_from[0]][_from[1]]; //origin in top left
+		boardPieces[_from[0]][_from[1]] = 0;
+		boardPieces[_to[0]][_to[1]] = piece;
+
+		uint256 color = boardColors[_from[0]][_from[1]]; //origin in top left
+		boardColors[_from[0]][_from[1]] = 0;
+		boardColors[_to[0]][_to[1]] = color;
+
 		if (isFirstMove[turnIndex] == true)
 			isFirstMove[turnIndex] = false;
+		_create_queen();
 		_next_turn();
 	}
 
-	function get_board() public view returns(uint256[8][8] memory) {
-		return board;
+	function get_boardPieces() public view returns(uint256[8][8] memory) {
+		return boardPieces;
 	}
 
 	function check_move(uint256[2] memory _from, uint256[2] memory _to) public view returns(bool) {
-		uint256 piece = board[_from[0]][_from[1]];
+		uint256 piece = boardPieces[_from[0]][_from[1]];
+		uint256 colorFrom = boardColors[_from[0]][_from[1]];
+		uint256 colorTo = boardColors[_to[0]][_to[1]];
+
+		int256 x = int256(_to[0]) - int256(_from[0]);
+		int256 y = int256(_to[1]) - int256(_from[1]);
 
 		if (piece == 1)
-			return _check_pawn(_from, _to);
+			return _check_pawn(x, y, colorFrom, colorTo);
 		else if (piece == 2)
-			_check_castle(_from, _to);
+			return _check_castle(x, y, colorFrom, colorTo, _to);
 		else if (piece == 3)
-			_check_bishop(_from, _to);
+			return _check_bishop(x, y, colorFrom, colorTo, _to);
 		else if (piece == 4)
-			_check_knight(_from, _to);
+			return _check_knight(x, y, colorFrom, colorTo);
 		else if (piece == 5)
-			_check_queen(_from, _to);
+			return (_check_bishop(x, y, colorFrom, colorTo, _to) != _check_castle(x, y, colorFrom, colorTo, _to));
 		else if (piece == 6)
-			_check_king(_from, _to);
+			return _check_king(x, y, colorFrom, colorTo);
+		return false;
 	}
 
 //============================================================================================
@@ -104,14 +117,23 @@ contract CryptoChess {
 	}
 
 	function _reset_board() internal {
-		board =	[	[2, 4, 3, 5, 6, 3, 4, 2],
-					[1, 1, 1, 1, 1, 1, 1, 1],
-					[0, 0, 0, 0, 0, 0, 0, 0],
-					[0, 0, 0, 0, 0, 0, 0, 0],
-					[0, 0, 0, 0, 0, 0, 0, 0],
-					[0, 0, 0, 0, 0, 0, 0, 0],
-					[1, 1, 1, 1, 1, 1, 1, 1],
-					[2, 4, 3, 5, 6, 3, 4, 2]];
+		boardPieces =	[	[2, 4, 3, 5, 6, 3, 4, 2],
+							[1, 1, 1, 1, 1, 1, 1, 1],
+							[0, 0, 0, 0, 0, 0, 0, 0],
+							[0, 0, 0, 0, 0, 0, 0, 0],
+							[0, 0, 0, 0, 0, 0, 0, 0],
+							[0, 0, 0, 0, 0, 0, 0, 0],
+							[1, 1, 1, 1, 1, 1, 1, 1],
+							[2, 4, 3, 5, 6, 3, 4, 2]];
+
+		boardColors =	[	[1, 1, 1, 1, 1, 1, 1, 1],
+							[1, 1, 1, 1, 1, 1, 1, 1],
+							[0, 0, 0, 0, 0, 0, 0, 0],
+							[0, 0, 0, 0, 0, 0, 0, 0],
+							[0, 0, 0, 0, 0, 0, 0, 0],
+							[0, 0, 0, 0, 0, 0, 0, 0],
+							[2, 2, 2, 2, 2, 2, 2, 2],
+							[2, 2, 2, 2, 2, 2, 2, 2]];
 	}
 
 	function _reset_timer() internal {
@@ -131,5 +153,113 @@ contract CryptoChess {
 		(bool success, ) = players[_winner].call{value: address(this).balance}("");
 		require(success, "transaction failed");
 		_reset_game();
+	}
+
+	//==============================================================================================
+
+	function _check_pawn(	int256 _x,
+							int256 _y,
+							uint256 _colorFrom,
+							uint256 _colorTo)
+						internal view returns(bool) {
+
+		if (_x == 0 && _colorTo == 0 && //forward
+				((_colorFrom == 1 && (_y == 1 || (_y == 2 && isFirstMove[_colorFrom - 1] == true))) ||
+				(_y == -1 || (_y == -2 && isFirstMove[_colorFrom - 1] == true))))
+			return true;
+		else if ((_x == 1 || _x == -1) && //eat
+					((_colorFrom == 1 && _colorTo == 2 && _y == 1) ||
+					(_colorTo == 1 && _y == -1)))
+			return true;
+		return false;
+	}
+
+	function _check_castle(	int256 _x,
+							int256 _y,
+							uint256 _colorFrom,
+							uint256 _colorTo,
+							uint256[2] memory _to)
+						internal view returns(bool) {
+
+		if (((_x == 0 && _y != 0) || (_x != 0 && _y == 0)) &&
+				_is_free_way(_x, _y, _to) &&
+				_colorTo != _colorFrom)
+			return true;
+		return false;
+	}
+
+	function _check_bishop(	int256 _x,
+							int256 _y,
+							uint256 _colorFrom,
+							uint256 _colorTo,
+							uint256[2] memory _to)
+						internal view returns(bool) {
+
+		if (_y < 0)
+			_y *= -1;
+		if (_x < 0)
+			_x *= -1;
+
+		if (_x == _y && _is_free_way(_x, _y, _to) &&
+				_colorTo != _colorFrom)
+			return true;
+		return false;
+	}
+
+	function _check_knight(	int256 _x,
+							int256 _y,
+							uint256 _colorFrom,
+							uint256 _colorTo)
+						internal pure returns(bool) {
+
+		if ((_y == 2 || _y == -2) && (_x == 1 || _x == -1) && _colorTo != _colorFrom)
+			return true;
+		return false;
+	}
+
+	function _check_king(	int256 _x,
+							int256 _y,
+							uint256 _colorFrom,
+							uint256 _colorTo)
+						internal pure returns(bool) {
+		if ((_x == 1 || _x == -1 || _y == 1 || _y == -1) && _colorFrom != _colorTo)
+			return true;
+		return false;
+	}
+
+	//==============================================================================================
+
+	function _create_queen() internal {
+		for (uint256 i = 0; i < 8; i++){
+			if (boardPieces[0][i] == 1 && boardColors[0][i] == 2)
+				boardPieces[0][i] = 5;
+			if (boardPieces[7][i] == 1 && boardColors[7][i] == 1)
+				boardPieces[7][i] = 5;
+		}
+	}
+
+	//use only in horizontal, vertical or diagonal moves
+	//returns true only if theres is no pieces between coordinates
+	function _is_free_way(	int256 _x,
+							int256 _y,
+							uint256[2] memory _to)
+						internal view returns(bool) {
+
+		while (true) {
+			if (_x < 0)
+				_x++;
+			else if (_x > 0)
+				_x--;
+			if (_y < 0)
+				_y++;
+			else if (_y > 0)
+				_y--;
+
+			if (_x == 0 && _y == 0)
+				return true;
+			if (boardPieces[uint256(int256(_to[0]) - _y)][uint256(int256(_to[1]) - _x)] != 0)
+				return false;
+		}
+		return false;
 	}
 }
