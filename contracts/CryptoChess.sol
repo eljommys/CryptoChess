@@ -16,7 +16,6 @@ contract CryptoChess {
 
 	uint256 turnIndex;
 
-
 	modifier onlyTurn {
 		_refresh_timer();
 		if (playersTimeLeft[turnIndex] == 0)
