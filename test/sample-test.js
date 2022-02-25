@@ -1,19 +1,23 @@
 const { expect } = require("chai");
-const { ethers } = require("hardhat");
+const { ethers, waffle } = require("hardhat");
+const provider = waffle.provider;
 
-describe("Greeter", function () {
-  it("Should return the new greeting once it's changed", async function () {
-    const Greeter = await ethers.getContractFactory("Greeter");
-    const greeter = await Greeter.deploy("Hello, world!");
-    await greeter.deployed();
+describe("CryptoChess tester", async function () {
+	const [player1, player2] = await ethers.getSigners();
 
-    expect(await greeter.greet()).to.equal("Hello, world!");
+	const ChessFactory = await ethers.getContractFactory("CryptoChess");
+	const Chess = await ChessFactory.deploy(20);
+	await Chess.deployed();
 
-    const setGreetingTx = await greeter.setGreeting("Hola, mundo!");
+	it("Should add a new player", async function () {
+		await Chess.join();
+		expect(await Chess.join()).to.equal("Hello, world!");
 
-    // wait until the transaction is mined
-    await setGreetingTx.wait();
+		const setGreetingTx = await Chess.setGreeting("Hola, mundo!");
 
-    expect(await greeter.greet()).to.equal("Hola, mundo!");
-  });
+		// wait until the transaction is mined
+		await setGreetingTx.wait();
+
+		expect(await Chess.greet()).to.equal("Hola, mundo!");
+	});
 });

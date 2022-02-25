@@ -1,29 +1,32 @@
 //SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
 
+import "hardhat/console.sol";
+
 contract CryptoChess {
 	//enum	Pieces	{PAWN, CASTLE, BISHOP, KNIGHT, QUEEN, KING}
 	//				1		2		3		4		5		6
-	address[2] players;
-	bool[2] isFirstMove;
+	address[2] public players;
+	bool[2] public isFirstMove;
 
-	uint256 [8][8] boardPieces; //index Y, X
-	uint256 [8][8] boardColors;
+	uint256 [8][8] public boardPieces; //index Y, X
+	uint256 [8][8] public boardColors;
 
-	uint256 enteringPrice;
-	uint256 lastTime;
-	uint256[2] playersTimeLeft;
+	uint256 public enteringPrice;
+	uint256 public lastTime;
+	uint256[2] public playersTimeLeft;
 
-	uint256 turnIndex;
+	uint256 public turnIndex;
 
 	modifier onlyTurn {
+		require(lastTime > 0, "The game is not in progress!");
 		_refresh_timer();
 		if (playersTimeLeft[turnIndex] == 0)
 			_end_game(turnIndex == 1 ? 0 : 1);
 		if (players[0] == msg.sender)
-			require(turnIndex == 0);
+			require(turnIndex == 0, "It's not your turn");
 		else if (players[1] == msg.sender)
-			require(turnIndex == 1);
+			require(turnIndex == 1, "It's not your turn");
 		else
 			revert("You're not playing!");
 		_;
@@ -46,6 +49,13 @@ contract CryptoChess {
 		revert("The game is full!");
 	}
 
+	function start() public {
+		require(lastTime == 0, "The game is in progress!");
+		require(players[0] != address(0) && players[1] != address(0), "The game is not full yet!");
+
+		lastTime = block.timestamp;
+	}
+
 	function move(uint256[2] memory _from, uint256[2] memory _to) public onlyTurn {
 		require(_from[0] < 8 && _from[1] < 8 && _to[0] < 8 && _to[1] < 8, "Out of bounds!");
 		require (check_move(_from, _to) == true, "This move is not valid!");
@@ -64,10 +74,6 @@ contract CryptoChess {
 			isFirstMove[turnIndex] = false;
 		_create_queen();
 		_next_turn();
-	}
-
-	function get_boardPieces() public view returns(uint256[8][8] memory) {
-		return boardPieces;
 	}
 
 	function check_move(uint256[2] memory _from, uint256[2] memory _to) public view returns(bool) {
@@ -91,6 +97,10 @@ contract CryptoChess {
 		else if (piece == 6)
 			return _check_king(x, y, colorFrom, colorTo);
 		return false;
+	}
+
+	function get_boardPieces() public view returns(uint256[8][8] memory) {
+		return boardPieces;
 	}
 
 //============================================================================================
